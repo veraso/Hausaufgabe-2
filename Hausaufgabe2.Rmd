@@ -1,0 +1,329 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# 1. Aufgabe #
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+BX_Book_Ratings <- read_delim("BX-CSV-Dump/BX-Book-Ratings.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+```{r}
+BX_Books <- read_delim("BX-CSV-Dump/BX-Books.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+```{r}
+BX_Users <- read_delim("BX-CSV-Dump/BX-Users.csv", 
+    ";", escape_double = FALSE, trim_ws = TRUE)
+```
+
+# Bereinigen #
+
+```{r}
+books <- BX_Books %>%
+  select(ISBN,`Book-Title`,`Book-Author`,`Year-Of-Publication`, `Publisher`)
+```
+```{r}
+head(books)
+```
+
+
+```{r}
+rm(BX_Books)
+```
+```{r}
+users <- BX_Users %>%
+  mutate(Age = as.numeric(Age))
+```
+
+
+```{r}
+rm(BX_Users)
+```
+```{r}
+ratings <- BX_Book_Ratings %>%
+  left_join(books)
+```
+
+```{r}
+head(ratings)
+```
+
+```{r}
+rm(BX_Book_Ratings)
+```
+
+```{r}
+ratings <- ratings %>%
+  filter(!is.na(`Book-Title`))
+```
+
+```{r}
+ratings_per_user <- ratings %>%
+  group_by(`User-ID`) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+head(ratings_per_user)
+```
+
+```{r}
+users <- users %>%
+  left_join(ratings_per_user) %>%
+  filter(n > 0)
+```
+
+
+```{r}
+head(users)
+```
+
+```{r}
+users <- users %>%
+  filter(!is.na(Age)) %>%
+  mutate(country = str_remove(Location, ".*,")) %>%
+  filter(country !="")
+```
+```{r}
+head(users)
+```
+
+Nutzer pro Land: 
+
+```{r}
+users %>%
+  group_by(country) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n))
+```
+
+Ländernamen bereinigen:
+```{r}
+users <- users %>%
+  mutate(country = str_extract(country, "\\w+"))
+```
+
+Verteilung anschauen:
+```{r}
+(ratings.distribution <- ratings %>%
+   group_by(`User-ID`) %>%
+   summarize(n = n()) %>%
+   arrange(desc(n)) %>%
+   group_by(n) %>%
+   summarize(m = n()))
+```
+
+Histogramm:
+```{r}
+hist(ratings.distribution$n, breaks=100)
+```
+
+
+## Am besten bewertete Bücher: ##
+
+```{r}
+ratings %>%
+  group_by(`Book-Title`) %>%
+  filter(`Book-Rating` > 0) %>%
+  summarise(BestenBuecher = mean(`Book-Rating`)) %>%
+  arrange(desc(BestenBuecher)) %>%
+  head(.,10)
+```
+
+
+## Inklusive Anzahl der Bewertungen: ##
+
+```{r}
+ratings %>%
+  group_by(`Book-Title`) %>%
+  filter(`Book-Rating` > 0) %>%
+  summarise(BestenBuecher = median(`Book-Rating`), wieviele = n()) %>%
+  arrange(desc(BestenBuecher), desc(wieviele)) %>%
+  filter(wieviele > 10) %>%
+  head(.,10)
+```
+
+## Am besten bewertete Autoren: ##
+
+```{r}
+ratings %>%
+  group_by(`Book-Author`) %>%
+  filter(`Book-Rating` > 0) %>%
+  summarise(BestenBuecher = median(`Book-Rating`), wieviele = n()) %>%
+  arrange(desc(BestenBuecher), desc(wieviele)) %>%
+  filter(wieviele > 10) %>%
+  head(.,10)
+```
+
+## Verlag mit den besten Büchern: ##
+
+```{r}
+ratings %>%
+  group_by(Publisher) %>%
+  filter(`Book-Rating` > 0) %>%
+  summarise(BestenBuecher = median(`Book-Rating`), wieviele = n()) %>%
+  arrange(desc(BestenBuecher), desc(wieviele)) %>%
+  filter(wieviele > 10) %>%
+  head(.,10)
+```
+# 2. Hausaufgabe #
+
+# 1. Gibt es eine lineare Beziehung zwischen Anzahl Bücher pro Publisher und Anzahl Ratings, die die Bücher eines Publishers erhalten? #
+
+Anzahl der Bücher pro Verlag:
+
+```{r}
+books_per_publisher <- books %>%
+  group_by(Publisher) %>%
+  summarise(Anzahl_Buecher = n()) %>%
+  arrange(desc(Anzahl_Buecher)) 
+```
+
+```{r}
+head(books_per_publisher)
+```
+
+
+Anzahl der Bewertungen pro Verlag:
+
+```{r}
+ratings_per_publisher <- ratings %>%
+  group_by(Publisher) %>%
+  summarise(Anzahl_Ratings = n()) %>%
+  arrange(desc(Anzahl_Ratings))
+```
+
+
+```{r}
+ratings_per_publisher
+```
+
+
+Verbinden der beiden zuvor erstellten Tabellen:
+
+```{r}
+books_ratings_pp <- books_per_publisher %>%
+  left_join(ratings_per_publisher)
+```
+
+
+```{r}
+ergebnis <- books_ratings_pp %>%
+  select(Anzahl_Buecher, Anzahl_Ratings)
+```
+
+```{r}
+ergebnis
+```
+
+
+Variablen festlegen:
+
+```{r}
+fit <- lm(ergebnis$Anzahl_Ratings ~ ergebnis$Anzahl_Buecher)
+```
+
+```{r}
+plot(ergebnis)
+```
+
+
+```{r}
+plot(ergebnis)
+abline(fit)
+```
+
+```{r}
+summary(fit)
+```
+
+Antwort:
+
+Ja, es besteht eine lineare Beziehung zwischen der Anzahl an Bücher pro Verlag  und der Anzahl der Ratings, die die Bücher der Verlage bekommen. Je mehr Bücher ein Verlag also hat, desto mehr Bewertungen können den Büchern dieses Verlags zugeordnet werden. Dies kann erkannt werden, da der R-Wert mit 0.757 näher an 1 liegt als an 0.
+
+
+
+# 2. Haben ältere Bücher mehr Ratings, weil sie mehr Zeit haben, um Ratings zu sammeln? #
+
+Tabelle mit Buchtiteln und Rating-Anzahl pro Buch erstellen:
+
+```{r}
+ratings_per_book <- ratings %>%
+  group_by(`Book-Title`) %>%
+  summarise(Anzahl = n()) %>%
+  arrange(desc(Anzahl))
+```
+
+```{r}
+ratings_per_book
+```
+
+Tabelle mit Erscheinungsjahr und jeweiliger Ratings-Anzahl erstellen:
+
+```{r}
+year_per_book <- ratings %>%
+  select(`Book-Title`,`Year-Of-Publication`)
+```
+```{r}
+year_per_book
+```
+
+Beide Tabellen mit Knotenpunkt auf Buchtitel verbinden:
+
+```{r}
+ratings_per_year <- year_per_book %>%
+  left_join(ratings_per_book)
+```
+
+```{r}
+ratings_per_year
+```
+
+Anzahl der Ratings und Erscheinungsjahr auswählen:
+
+```{r}
+ergebnis2 <- ratings_per_year %>%
+  select(`Year-Of-Publication`,Anzahl)
+```
+
+```{r}
+ergebnis2
+```
+
+Variablen festlegen:
+
+```{r}
+fit2 <- lm(ratings_per_year$`Year-Of-Publication` ~ ratings_per_year$Anzahl)
+```
+
+Streudiagramm:
+
+```{r}
+plot(ergebnis2)
+```
+
+```{r}
+plot(ergebnis2)
+abline(fit2)
+```
+
+Ergebniswerte anzeigen lassen:
+
+```{r}
+summary(fit2)
+```
+Antwort:
+
+Meine erste Antwort auf die Frage war, dass ein langer Zeitraum seit Erscheinung eines Buches, natürlich mehr Zeit bietet, in welcher dieses Buch Bewertungen erhalten kann und die beiden Faktoren in dieser Hinsicht klar miteinander zusammenhängen können. Gleichzeitig ist dieser Zusammenhang jedoch, meiner Meinung nach, schwer einzuschätzen, da auch die Aktualität des Buches eine wichtige Rolle in der Anzahl der Bewertungen spielt. Liegt das Erscheinungsjahr weit zurück, so haben eventuell nicht mehr vielen Menschen Bedarf für dieses Buch oder Interesse an diesem. Gleichzeitig kann es natürlich auch vorkommen, dass seit dem Erscheinungsjahr, neuere Auflagen und Revisionen erschienen sind, welche nun - im Gegensatz zum ursprünglichen Werk - die Bewertungen erhalten. 
+
+Mein Versuch der linearen Regressionsanalyse führte zu einem R-Wert von 0,001087, welcher offensichtlich um einiges näher an 0 als an 1 liegt. Dies würde aussagen, dass keine lineare Beziehung zwischen dem Alter der Bücher und ihrer Bewertungsanzahl besteht.
